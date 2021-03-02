@@ -19,7 +19,7 @@ class ReaderTestCase(unittest.TestCase):
             annotation_filename = "data/train/named/texts_and_ann/" + filename + ".ann"
             normalization_filename = "data/train/named/norm/" + filename + ".norm"
 
-            _, entities, normalized_entities = reader.read(text_filename, annotation_filename, normalization_filename)
+            _, entities, _, normalized_entities = reader.read(text_filename, annotation_filename, normalization_filename)
             self.assertEqual(len(entities), len(normalized_entities))
 
 if __name__ == '__main__':

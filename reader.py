@@ -18,89 +18,83 @@ class RuNormASReader():
         normalized_entities.pop()
 
         entities = []
-        for entity_interval, normalized_entity in zip(entities_intervals, normalized_entities):
+        for entity_interval in entities_intervals:
             entities.append(document[entity_interval[0] : entity_interval[1]])
-            document_length = len(document)
 
-            # меняется длина, поэтому нужно придумать что-то другое
-            # придумал добавлять символ * к каждой сущности, если ее длина < длины интервала
-            # потом будем по этому символу чистить
-            entity_length = entity_interval[1] - entity_interval[0]
-            if len(normalized_entity) < entity_length:
-                normalized_entity += ('*' * (entity_length - len(normalized_entity)))
-            document = document[:entity_interval[0]] + normalized_entity + document[entity_interval[1]: document_length]
+        entity2norm = {}
+        for idx in range(len(entities)):
+            entity2norm[entities[idx]] = normalized_entities[idx]
+
+        entities_intervals = sorted(entities_intervals, key=lambda x: x[0])
+
+        entities = []
+        for entity_interval in entities_intervals:
+            entities.append(document[entity_interval[0]: entity_interval[1]])
+
+        normalized_entities = []
+        for entity in entities:
+            normalized_entities.append(entity2norm[entity])
+
+        entities_copy = entities.copy()
+        normalized_entities_copy = normalized_entities.copy()
+
+        while entities_copy:
+            entity = entities_copy.pop(0)
+            norm = normalized_entities_copy.pop(0)
+            document = document.replace(entity, norm, 1)
 
         sentences = open(text_filename, 'r').read().split('\u2028')
-        normalized_sentences = document.split('\u2028')
+        # document - это normalized document
+        document = document.split('\u2028')
 
-        return sentences, normalized_sentences, entities, normalized_entities
+        sentences = [sentence.split() for sentence in sentences]
+        normalized_sentences = [sentence.split() for sentence in document]
+        return sentences, normalized_sentences
 
-
-def markup_entities(text, entities):
-    sentences, sentences_tags = [], []
-    entities = get_unique_entities(entities)
-
-    for sentence in text:
-        sentence = sentence.replace('*', '')
-        sentence = sentence.split()
-        tags = []
-
-        for word in sentence:
-            # убираем '*' в случае нормализованных сущностей
-            if (word in entities) or (word[:-1] in entities): # убираем последний символ, который может быть пунктуацией
-                tags.append('ENTITY')
-            else:
-                tags.append('O')
-
-        # for word, tag in zip(sentence, tags):
-        #    print(word, tag)
-
-        sentences.append(sentence)
-        sentences_tags.append(tags)
-
-    return sentences, sentences_tags
-
-def get_unique_entities(document_entities):
-    return set([idx for entity in document_entities for idx in entity.split()])
 
 def collect_sentences():
     reader = RuNormASReader()
 
     sentences = []
-    sentences_tags = []
-
     normalized_sentences = []
-    normalized_sentences_tags = []
 
     filenames = []
     for _, _, files in os.walk("data/train/named/texts_and_ann"):
-        for filename in files:
+        for filename in sorted(files):
             filenames.append(filename.split('.')[0])
 
-    filenames = set(filenames)
+    filenames = sorted(set(filenames), reverse=True)
 
     for filename in filenames:
         text_filename = "data/train/named/texts_and_ann/" + filename + ".txt"
         annotation_filename = "data/train/named/texts_and_ann/" + filename + ".ann"
         normalization_filename = "data/train/named/norm/" + filename + ".norm"
-        text, normalized_text, entities, normalized_entities = reader.read(text_filename, annotation_filename, normalization_filename)
+        text, normalized_text = reader.read(text_filename, annotation_filename, normalization_filename)
 
-        document_sentences, document_tags = markup_entities(text, entities)
-        document_normalized_sentences, document_normalized_tags = markup_entities(normalized_text, normalized_entities)
+        sentences += text
+        normalized_sentences += normalized_text
 
-        for sentence, tag in zip(document_sentences, document_tags):
-            if sentence != []:
-                sentences.append(sentence)
-                sentences_tags.append(tag)
-
-        for sentence, tag in zip(document_normalized_sentences, document_normalized_tags):
-            if sentence != []:
-                normalized_sentences.append(sentence)
-                normalized_sentences_tags.append(tag)
-
-    return sentences, sentences_tags, normalized_sentences, normalized_sentences_tags
+    return sentences, normalized_sentences
 
 
 if __name__ == '__main__':
-    sentences, sentences_tags, normalized_sentences, normalized_sentences_tags = collect_sentences()
+    # sentences, sentences_tags, normalized_sentences, normalized_sentences_tags = collect_sentences()
+    """text_filename = "data/train/named/texts_and_ann/1009448.txt"
+    annotation_filename = "data/train/named/texts_and_ann/1009448.ann"
+    normalization_filename = "data/train/named/norm/1009448.norm"
+    reader = RuNormASReader()
+    sentences, normalization, entities, normalized_entities = reader.read(text_filename, annotation_filename, normalization_filename)
+    print(sentences)
+    print(normalization)
+    print(entities)
+    print(normalized_entities)"""
 
+    sentences, normalized_sentences = collect_sentences()
+    for i in range(100):
+        print(sentences[i])
+        print(normalized_sentences[i])
+        print('-' * 75)
+
+    print(len(sentences), len(normalized_sentences))
+
+    collect_sentences()
