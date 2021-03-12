@@ -1,5 +1,5 @@
 import re
-from reader import collect_sentences
+from deprecated_code.reader_old import collect_sentences
 import torch
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence

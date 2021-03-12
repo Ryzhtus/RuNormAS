@@ -1,6 +1,6 @@
 import os
 import unittest
-from reader import RuNormASReader
+from deprecated_code.reader_old import RuNormASReader
 
 class ReaderTestCase(unittest.TestCase):
     def test_equal_lengths(self):
