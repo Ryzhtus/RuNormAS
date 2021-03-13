@@ -199,7 +199,6 @@ class RuNormASReaderForMachineTranslation():
 
 if __name__ == '__main__':
     all_sentences, all_sentences_endings, endings_set = collect_sentences()
-    print(all_sentences)
     for i in range(10):
         print(all_sentences[i])
         print(all_sentences_endings[i])
