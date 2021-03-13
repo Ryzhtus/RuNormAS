@@ -58,28 +58,52 @@ class RuNormASDataset():
     
         return tokens, normalized_tokens
 
-    def find_endings(self, word):
-        word_stem = self.stemmer.stem(word)
-        if word[0].isupper():
-            word_stem = word_stem.capitalize()
-        ending = word.replace(word_stem, '')
-        print(word, word_stem, ending)
 
-        if word != ending:
-            self.endings.append(ending)
+class RuNormASDatasetForTokenClassification():
+    def __init__(self, sentences, sentences_endings, endings_set, tokenizer):
+        self.sentences = sentences
+        self.sentences_endings = sentences_endings
+        self.endings = ['<PAD>'] + list(endings_set)
 
-if __name__ == '__main__':
-    TOKENIZER = BertTokenizer.from_pretrained("DeepPavlov/rubert-base-cased", do_lower_case=False)
-    sentences, normalized_sentences = collect_sentences()
-    dataset = RuNormASDataset(sentences, normalized_sentences, TOKENIZER)
+        self.tag2idx = {tag: idx for idx, tag in enumerate(self.endings)}
+        self.idx2tag = {idx: tag for idx, tag in enumerate(self.endings)}
 
-    dataloader = DataLoader(dataset, batch_size=8, collate_fn=dataset.paddings)
-    print(next(iter(dataloader)))
-    print(dataset[10])
+        self.tokenizer = tokenizer
 
-    """
-    for i in range(200, 500):
-        print(i, dataset.sentences[i])
-        print(i, dataset.normalized_sentences[i])
-        print('-' * 75)
-    """
+    def __len__(self):
+        return len(self.sentences)
+
+    def __getitem__(self, item):
+        words = self.sentences[item]
+        words_endings = self.sentences_endings[item]
+
+        word2ending = dict(zip(words, words_endings))
+
+        tokens = []
+        tokenized_endings = []
+
+        for word in words:
+            if word not in ('[CLS]', '[SEP]'):
+                subtokens = self.tokenizer.tokenize(word)
+                for i in range(len(subtokens)):
+                    if i != len(subtokens) - 1:
+                        tokenized_endings.append('<NO>')
+                    else:
+                        tokenized_endings.append(word2ending[word])
+                tokens.extend(subtokens)
+
+        tokens = ['[CLS]'] + tokens + ['[SEP]']
+        tokens_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+
+        tokenized_endings = ['<NO>'] + tokenized_endings + ['<NO>']
+        endings_ids = [self.tag2idx[tag] for tag in tokenized_endings]
+
+        return torch.LongTensor(tokens_ids), torch.LongTensor(endings_ids)
+
+    def paddings(self, batch):
+        tokens, endings = list(zip(*batch))
+
+        tokens = pad_sequence(tokens, batch_first=True)
+        endings = pad_sequence(endings, batch_first=True)
+
+        return tokens, endings

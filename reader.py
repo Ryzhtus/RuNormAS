@@ -1,6 +1,5 @@
 import os
-import re
-import collections
+import tqdm
 from nltk.stem.snowball import SnowballStemmer
 from natasha import Segmenter, Doc
 
@@ -10,6 +9,36 @@ def is_abbreviation(word):
         return True
     else:
         return False
+
+def clean_entity(entry):
+    # в документе 994383 был странный токен с *, поэтому на такой случай удаляем такие штуки,
+    # иначе ошибка с размерностью
+    entry = entry.replace('*', '')
+    # документ 990538 Sputnik'ом разибвается на три токена, поэтому 'ом убираем
+    # документ 927141 Ростова-на Дону -> Ростова-на-Дону
+    # документ 1041141 Кара- оол -> Кара-оол
+    if '’ом' in entry:
+        entry = entry.replace('’ом', '')
+
+    if '«' in entry:
+        entry = entry.replace('«', '')
+
+    if '»' in entry:
+        entry = entry.replace('»', '')
+
+    if '(' in entry:
+        entry = entry.replace('(', '')
+
+    if ')' in entry:
+        entry = entry.replace(')', '')
+
+    if entry == 'Ростова-на Дону':
+        entry = 'Ростова-на-Дону'
+
+    if entry == 'Кара- оол':
+        entry = 'Кара-оол'
+
+    return entry
 
 
 class RuNormASReaderForSequenceTagging():
@@ -39,6 +68,7 @@ class RuNormASReaderForSequenceTagging():
                 spans = spans[2:]
 
             entry = entry.strip()
+            entry = clean_entity(entry)
 
             doc = Doc(entry)
             doc.segment(segmenter)
@@ -65,6 +95,10 @@ class RuNormASReaderForSequenceTagging():
             entry.segment(segmenter)
             normalized_entities += entry.tokens
 
+        #print(len(entities_spans), len(entities), len(normalized_entities))
+        #print(entities)
+        #print(normalized_entities)
+
         return doc_text, entities, normalized_entities, entities_spans
 
     def parse_entities(self, doc_text, entities, normalized_entities, entities_spans):
@@ -75,6 +109,7 @@ class RuNormASReaderForSequenceTagging():
             sentence_endings = []
             for token in sentence.tokens:
                 if self.find_entity(token, entities_spans):
+                    #print(token.text)
                     id = self.find_entity(token, entities_spans)
                     if token.text == normalized_entities[id].text:
                         sentence_tokens.append(token.text)
@@ -129,6 +164,33 @@ class RuNormASReaderForSequenceTagging():
                 else:
                     return ''
 
+def collect_sentences():
+    reader = RuNormASReaderForSequenceTagging()
+
+    all_sentences = []
+    all_sentences_endings = []
+
+    filenames = []
+    for _, _, files in os.walk("data/train_new/named/texts_and_ann"):
+        for filename in sorted(files):
+            filenames.append(filename.split('.')[0])
+
+    filenames = sorted(set(filenames), reverse=True)
+
+    for filename in tqdm.tqdm(filenames, total=len(filenames)):
+        text_filename = "data/train_new/named/texts_and_ann/" + filename + ".txt"
+        annotation_filename = "data/train_new/named/texts_and_ann/" + filename + ".ann"
+        normalization_filename = "data/train_new/named/norm/" + filename + ".norm"
+        document, document_entities, document_normalization, document_entities_spans = reader.read(text_filename, annotation_filename, normalization_filename)
+        sentences, sentences_endings = reader.parse_entities(document, document_entities, document_normalization,
+                                                             document_entities_spans)
+        all_sentences += sentences
+        all_sentences_endings += sentences_endings
+
+    reader.normalization_endings.append('')
+    reader.normalization_endings = set(reader.normalization_endings)
+
+    return all_sentences, all_sentences_endings, reader.normalization_endings
 
 class RuNormASReaderForMachineTranslation():
     def __init__(self):
@@ -136,12 +198,21 @@ class RuNormASReaderForMachineTranslation():
 
 
 if __name__ == '__main__':
-    text_filename = "data/train_new/named/texts_and_ann/159004.txt"
-    annotation_filename = "data/train_new/named/texts_and_ann/159004.ann"
-    normalization_filename = "data/train_new/named/norm/159004.norm"
+    all_sentences, all_sentences_endings, endings_set = collect_sentences()
+    print(all_sentences)
+    for i in range(10):
+        print(all_sentences[i])
+        print(all_sentences_endings[i])
+        print('-' * 75)
+
+    print(endings_set)
+    """
+    text_filename = "data/train_new/named/texts_and_ann/1041141.txt"
+    annotation_filename = "data/train_new/named/texts_and_ann/1041141.ann"
+    normalization_filename = "data/train_new/named/norm/1041141.norm"
     reader = RuNormASReaderForSequenceTagging()
     document, document_entities, document_normalization, document_entities_spans = normalization = reader.read(text_filename, annotation_filename, normalization_filename)
     sentences, sentences_endings = reader.parse_entities(document, document_entities, document_normalization, document_entities_spans)
     for sentence, sentence_endings in zip(sentences, sentences_endings):
         for token, ending in zip(sentence, sentence_endings):
-            print(token, '->', ending)
+            print(token, '->', ending)"""
