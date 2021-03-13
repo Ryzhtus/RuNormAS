@@ -167,8 +167,11 @@ class RuNormASReaderForSequenceTagging():
 def collect_sentences():
     reader = RuNormASReaderForSequenceTagging()
 
-    all_sentences = []
-    all_sentences_endings = []
+    all_sentences_train = []
+    all_sentences_endings_train = []
+
+    all_sentences_eval = []
+    all_sentences_endings_eval = []
 
     filenames = []
     for _, _, files in os.walk("data/train_new/named/texts_and_ann"):
@@ -177,20 +180,34 @@ def collect_sentences():
 
     filenames = sorted(set(filenames), reverse=True)
 
-    for filename in tqdm.tqdm(filenames, total=len(filenames)):
+    train = filenames[:2000]
+    eval = filenames[2000:]
+
+    for filename in tqdm.tqdm(train, total=len(train)):
         text_filename = "data/train_new/named/texts_and_ann/" + filename + ".txt"
         annotation_filename = "data/train_new/named/texts_and_ann/" + filename + ".ann"
         normalization_filename = "data/train_new/named/norm/" + filename + ".norm"
         document, document_entities, document_normalization, document_entities_spans = reader.read(text_filename, annotation_filename, normalization_filename)
         sentences, sentences_endings = reader.parse_entities(document, document_entities, document_normalization,
                                                              document_entities_spans)
-        all_sentences += sentences
-        all_sentences_endings += sentences_endings
+        all_sentences_train += sentences
+        all_sentences_endings_train += sentences_endings
+
+    for filename in tqdm.tqdm(eval, total=len(eval)):
+        text_filename = "data/train_new/named/texts_and_ann/" + filename + ".txt"
+        annotation_filename = "data/train_new/named/texts_and_ann/" + filename + ".ann"
+        normalization_filename = "data/train_new/named/norm/" + filename + ".norm"
+        document, document_entities, document_normalization, document_entities_spans = reader.read(text_filename, annotation_filename, normalization_filename)
+        sentences, sentences_endings = reader.parse_entities(document, document_entities, document_normalization,
+                                                             document_entities_spans)
+        all_sentences_eval += sentences
+        all_sentences_endings_eval += sentences_endings
 
     reader.normalization_endings.append('')
+    reader.normalization_endings.append('<NO>')
     reader.normalization_endings = set(reader.normalization_endings)
 
-    return all_sentences, all_sentences_endings, reader.normalization_endings
+    return all_sentences_train, all_sentences_endings_train, all_sentences_eval, all_sentences_endings_eval, reader.normalization_endings
 
 class RuNormASReaderForMachineTranslation():
     def __init__(self):
@@ -198,10 +215,15 @@ class RuNormASReaderForMachineTranslation():
 
 
 if __name__ == '__main__':
-    all_sentences, all_sentences_endings, endings_set = collect_sentences()
-    for i in range(10):
+    all_sentences, all_sentences_endings, all_sentences_eval, all_sentences_endings_eval, endings_set = collect_sentences()
+    for i in range(2):
         print(all_sentences[i])
         print(all_sentences_endings[i])
+        print('-' * 75)
+
+    for i in range(2):
+        print(all_sentences_eval[i])
+        print(all_sentences_endings_eval[i])
         print('-' * 75)
 
     print(endings_set)
