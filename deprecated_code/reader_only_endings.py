@@ -202,7 +202,7 @@ def collect_sentences_for_sequence_tagging():
     all_sentences_endings_eval = []
 
     filenames = []
-    for _, _, files in os.walk("data/train_new/named/texts_and_ann"):
+    for _, _, files in os.walk("../data/train_new/named/texts_and_ann"):
         for filename in sorted(files):
             filenames.append(filename.split('.')[0])
 
@@ -238,9 +238,9 @@ def collect_sentences_for_sequence_tagging():
     return all_sentences_train, all_sentences_endings_train, all_sentences_eval, all_sentences_endings_eval, reader.normalization_endings
 
 if __name__ == '__main__':
-    text_filename = "data/train_new/named/texts_and_ann/1041141.txt"
-    annotation_filename = "data/train_new/named/texts_and_ann/1041141.ann"
-    normalization_filename = "data/train_new/named/norm/1041141.norm"
+    text_filename = "../data/train_new/named/texts_and_ann/1041141.txt"
+    annotation_filename = "../data/train_new/named/texts_and_ann/1041141.ann"
+    normalization_filename = "../data/train_new/named/norm/1041141.norm"
     reader = RuNormASReaderForSequenceTagging()
     document, document_entities, document_normalization, document_entities_spans, entity2id = reader.read(text_filename, annotation_filename, normalization_filename)
     sentences, sentences_endings, sentences_entities_ids = reader.parse_entities(document, document_normalization, document_entities_spans, entity2id)

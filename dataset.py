@@ -60,9 +60,9 @@ class RuNormASDataset():
 
 
 class RuNormASDatasetForTokenClassification():
-    def __init__(self, sentences, sentences_endings, endings_set, tokenizer):
-        self.sentences = sentences
-        self.sentences_endings = sentences_endings
+    def __init__(self, entities, normalization_endings, endings_set, tokenizer):
+        self.entities = entities
+        self.normalization_endings = normalization_endings
         self.endings = ['<PAD>'] + list(endings_set)
 
         self.tag2idx = {tag: idx for idx, tag in enumerate(self.endings)}
@@ -71,11 +71,11 @@ class RuNormASDatasetForTokenClassification():
         self.tokenizer = tokenizer
 
     def __len__(self):
-        return len(self.sentences)
+        return len(self.entities)
 
     def __getitem__(self, item):
-        words = self.sentences[item]
-        words_endings = self.sentences_endings[item]
+        words = self.entities[item]
+        words_endings = self.normalization_endings[item]
 
         word2ending = dict(zip(words, words_endings))
 
@@ -95,7 +95,7 @@ class RuNormASDatasetForTokenClassification():
         tokens = ['[CLS]'] + tokens + ['[SEP]']
         tokens_ids = self.tokenizer.convert_tokens_to_ids(tokens)
 
-        tokenized_endings = ['<NO>'] + tokenized_endings + ['<NO>']
+        tokenized_endings = [''] + tokenized_endings + ['']
         endings_ids = [self.tag2idx[tag] for tag in tokenized_endings]
 
         return torch.LongTensor(tokens_ids), torch.LongTensor(endings_ids)
