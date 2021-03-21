@@ -95,19 +95,15 @@ class RuNormASReaderForSequenceTagging():
 
         entities_stem = []
         norm_endings = []
+
         for entity, norm in zip(entities, normalized_entities):
             endings = []
             stems = []
             for token, token_norm in zip(entity, norm):
-                # print(token, token_norm)
-                if token.text == token_norm.text:
-                    endings.append('')
-                    stems.append(token.text)
-                else:
-                    stem = self.get_stem(token.text)
-                    ending = self.find_ending(token_norm.text, stem, is_normalization=True)
-                    stems.append(stem)
-                    endings.append(ending)
+                stem = self.get_stem(token.text)
+                ending = self.find_ending(token_norm.text, stem, is_normalization=True)
+                stems.append(stem)
+                endings.append(ending)
             entities_stem.append(stems)
             norm_endings.append(endings)
 
