@@ -10,6 +10,7 @@ def is_abbreviation(word):
     else:
         return False
 
+
 def clean_entity(entry):
     # в документе 994383 был странный токен с *, поэтому на такой случай удаляем такие штуки,
     # иначе ошибка с размерностью
@@ -41,11 +42,13 @@ def clean_entity(entry):
     return entry
 
 
+
 class RuNormASReaderForSequenceTagging():
     def __init__(self):
         self.endings = []
         self.normalization_endings = []
         self.stemmer = SnowballStemmer('russian')
+        self.symbols = ['«', '»', '(', ')', "'", '’']
 
     def read(self, text_filename, annotation_filename, normalization_filename):
         text = open(text_filename, 'r', encoding='utf-8').read()
@@ -58,20 +61,18 @@ class RuNormASReaderForSequenceTagging():
         doc_text.segment(segmenter)
 
         entities = []
-        entities_spans = []
-        entity_id = 0
-        entities_ids = []
-        entity2id = []
-        annotation_counter = 0
+        number_of_entities_in_annotation = 0
+
         for line in annotation:
             if line != '\n' or line != '':
-                annotation_counter += 1
+                number_of_entities_in_annotation += 1
+
             spans = list(map(int, line.strip().split()))
             entry = ''
 
             while spans:
                 start, stop = spans[0], spans[1]
-                entry += text[start: stop] + " "
+                entry = text[start: stop] + ' '
                 spans = spans[2:]
 
             entry = entry.strip()
@@ -80,89 +81,50 @@ class RuNormASReaderForSequenceTagging():
             doc = Doc(entry)
             doc.segment(segmenter)
 
-            entities += doc.tokens
-            entry_ids = [entity_id for i in range(len(doc.tokens))]
-            entities_ids += entry_ids
+            entities += [doc.tokens]
 
-            for token in range(len(doc.tokens)):
-                entity2id.append([doc.tokens[token], entry_ids[token]])
-                #entity2id[doc.tokens[token]] = entry_ids[token]
-
-            spans = list(map(int, line.strip().split()))
-            if len(spans) == 2 and len(doc.tokens) > 1:
-                start = spans[0]
-                stop = start
-                for idx in range(len(doc.tokens)):
-                    start += doc.tokens[idx].start
-                    stop = start + (doc.tokens[idx].stop - doc.tokens[idx].start)  # вот это я математику тут придумал
-                    entities_spans += [[start, stop, entity_id]]
-            else:
-                while spans:
-                    entities_spans += [[spans[0], spans[1], entity_id]]
-                    spans = spans[2:]
-
-            entity_id += 1
+        # print(len(entities), entities)
 
         normalized_entities = []
         for line in normalization:
             line.strip()
-            entry = Doc(line)
+            entry = clean_entity(line)
+            entry = Doc(entry)
             entry.segment(segmenter)
-            normalized_entities += entry.tokens
+            normalized_entities += [entry.tokens]
 
-        return doc_text, entities, normalized_entities, entities_spans, annotation_counter
+        entities_stem = []
+        norm_endings = []
 
-    def parse_entities(self, doc_text, normalized_entities, entities_spans):
-        for token in doc_text.tokens:
-            if token.text == 'Жуковский':
-                print(token)
-        sentences = []
-        sentences_endings = []
-        sentences_entities_ids = []
-        for sentence in doc_text.sents:
-            sentence_tokens = []
-            sentence_endings = []
-            sentence_entities_id = []
-            for token in sentence.tokens:
-                if self.find_entity_by_spans(token, entities_spans):
-                    id, entry_id = self.find_entity_by_spans_with_entry_id(token, entities_spans)
-                    if token.text == normalized_entities[id].text:
-                        sentence_tokens.append(token.text)
-                        sentence_endings.append('')
-                        sentence_entities_id.append(entry_id)
-                    else:
-                        stem = self.get_stem(token.text)
-                        ending = self.find_ending(normalized_entities[id].text, stem, is_normalization=True)
-                        sentence_tokens.append(stem)
-                        sentence_endings.append(ending)
-                        sentence_entities_id.append(entry_id)
+        for entity, norm in zip(entities, normalized_entities):
+            norms_and_endings = []
+            stems_and_endings = []
+            for token, token_norm in zip(entity, norm):
+                if is_abbreviation(token.text):
+                    stem = token.text
+                    ending = ''
+                    norm_ending = ''
                 else:
-                    sentence_endings.append('<NO>')
-                    sentence_tokens.append(token.text)
-                    sentence_entities_id.append(-1)
-            sentences.append(sentence_tokens)
-            sentences_endings.append(sentence_endings)
-            sentences_entities_ids.append(sentence_entities_id)
+                    stem = self.get_stem(token.text)
+                    ending = token.text.replace(stem, '')
+                    norm_ending = token_norm.text.replace(stem, '')
 
-        return sentences, sentences_endings, sentences_entities_ids
+                self.endings.append(ending)
+                self.normalization_endings.append(norm_ending)
+                stems_and_endings.append(stem)
+                stems_and_endings.append(ending)
+                norms_and_endings.append('<NO>')
+                norms_and_endings.append(norm_ending)
+            entities_stem.append(stems_and_endings)
+            norm_endings.append(norms_and_endings)
 
-    def find_entity_by_spans(self, token, entities_spans):
-            for idx in range(len(entities_spans)):
-                if entities_spans[idx][0] == token.start and entities_spans[idx][1] == token.stop:
-                    return True
 
-    def find_entity_by_spans_with_entry_id(self, token, entities_spans):
-            for idx in range(len(entities_spans)):
-                if entities_spans[idx][0] == token.start and entities_spans[idx][1] == token.stop:
-                    document_entry_id = entities_spans[idx][2]
-                    return idx, document_entry_id
+        #print(len(normalized_entities), normalized_entities)
+        """
+        for idx in range(len(entities)):
+            print(entities[idx], normalized_entities[idx])"""
 
-    def find_entity(self, token, entity2id):
-        for idx in range(len(entity2id)):
-            #print(token.text)
-            #print(entity2id[idx])
-            if token.text == entity2id[idx][0].text:
-                return idx
+        return entities_stem, norm_endings
 
     def get_stem(self, word):
         if is_abbreviation(word):
@@ -199,11 +161,11 @@ class RuNormASReaderForSequenceTagging():
 def collect_sentences_for_sequence_tagging():
     reader = RuNormASReaderForSequenceTagging()
 
-    all_sentences_train = []
-    all_sentences_endings_train = []
+    entities_train = []
+    endings_train = []
 
-    all_sentences_eval = []
-    all_sentences_endings_eval = []
+    entities_eval = []
+    endings_eval = []
 
     filenames = []
     for _, _, files in os.walk("../data/train_new/named/texts_and_ann"):
@@ -215,100 +177,56 @@ def collect_sentences_for_sequence_tagging():
     train = filenames[:2000]
     eval = filenames[2000:]
 
+
     for filename in tqdm.tqdm(train, total=len(train)):
         text_filename = "data/train_new/named/texts_and_ann/" + filename + ".txt"
         annotation_filename = "data/train_new/named/texts_and_ann/" + filename + ".ann"
         normalization_filename = "data/train_new/named/norm/" + filename + ".norm"
-        document, document_entities, document_normalization, document_entities_spans, counter = reader.read(text_filename, annotation_filename, normalization_filename)
-        sentences, sentences_endings, sentences_entities_ids = reader.parse_entities(document, document_normalization, document_entities_spans)
+        document_entities, document_normalization = reader.read(text_filename, annotation_filename, normalization_filename)
 
-        ids = []
-        for sentences_ids in sentences_entities_ids:
-            for idx in sentences_ids:
-                if idx != -1:
-                    ids.append(idx)
-        ids = set(ids)
-
-        if len(ids) != counter:
+        if len(document_entities) != len(document_normalization):
             print(filename)
-            print(ids)
-            print(counter)
             print('---------')
 
-        all_sentences_train += sentences
-        all_sentences_endings_train += sentences_endings
+        entities_train += document_entities
+        endings_train += document_normalization
 
     for filename in tqdm.tqdm(eval, total=len(eval)):
         text_filename = "data/train_new/named/texts_and_ann/" + filename + ".txt"
         annotation_filename = "data/train_new/named/texts_and_ann/" + filename + ".ann"
         normalization_filename = "data/train_new/named/norm/" + filename + ".norm"
-        document, document_entities, document_normalization, document_entities_spans, counter = reader.read(text_filename, annotation_filename, normalization_filename)
-        sentences, sentences_endings, sentences_entities_ids = reader.parse_entities(document, document_normalization, document_entities_spans)
+        document_entities, document_normalization = reader.read(text_filename, annotation_filename,
+                                                                normalization_filename)
 
-        ids = []
-        for sentences_ids in sentences_entities_ids:
-            for idx in sentences_ids:
-                if idx != -1:
-                    ids.append(idx)
-        ids = set(ids)
-
-        if len(ids) != counter:
+        if len(document_entities) != len(document_normalization):
             print(filename)
-            print(ids)
-            print(counter)
             print('---------')
 
-        all_sentences_eval += sentences
-        all_sentences_endings_eval += sentences_endings
+        entities_eval += document_entities
+        endings_eval += document_normalization
 
     reader.normalization_endings.append('')
     reader.normalization_endings.append('<NO>')
     reader.normalization_endings = set(reader.normalization_endings)
 
-    return all_sentences_train, all_sentences_endings_train, all_sentences_eval, all_sentences_endings_eval, reader.normalization_endings
+    return entities_train, endings_train, entities_eval, endings_eval,  reader.normalization_endings
 
 if __name__ == '__main__':
+    entities_train, endings_train, entities_eval, endings_eval, normalization_endings = collect_sentences_for_sequence_tagging()
+
+    counter = 0
+    for entity, norm in zip(entities_train, endings_train):
+        print(entity, norm)
+        counter += 1
+        if counter == 100:
+            break
+
     """
-    #all_sentences_train, all_sentences_endings_train, all_sentences_eval, all_sentences_endings_eval, endings_set = collect_sentences_for_sequence_tagging()
-
-    text_filename = "data/train_new/named/texts_and_ann/992640.txt"
-    annotation_filename = "data/train_new/named/texts_and_ann/992640.ann"
-    normalization_filename = "data/train_new/named/norm/992640.norm"
-    #text_filename = "data/train_new/named/texts_and_ann/277557.txt"
-    #annotation_filename = "data/train_new/named/texts_and_ann/277557.ann"
-    #normalization_filename = "data/train_new/named/norm/277557.norm"
+    text_filename = "data/train_new/named/texts_and_ann/970431.txt"
+    annotation_filename = "data/train_new/named/texts_and_ann/970431.ann"
+    normalization_filename = "data/train_new/named/norm/970431.norm"
     reader = RuNormASReaderForSequenceTagging()
-    document, document_entities, document_normalization, document_entities_spans, counter = reader.read(text_filename, annotation_filename, normalization_filename)
-    sentences, sentences_endings, sentences_entities_ids = reader.parse_entities(document, document_normalization, document_entities_spans)
-    print(document_entities)
-    ids = []
-    for sentences_ids in sentences_entities_ids:
-        for idx in sentences_ids:
-            if idx != -1:
-                ids.append(idx)
-    print(document_entities_spans)
-    print(ids)
-    print(counter)
+    document_entities, document_normalization, = reader.read(text_filename, annotation_filename, normalization_filename)
 
-    
-    print(len(document_entities), document_entities)
-    print(len(document_normalization), document_normalization)
-    print(document_entities_spans)
-    
-    for sentence, sentence_endings, entities_id in zip(sentences, sentences_endings, sentences_entities_ids):
-        for token, ending, entity_id in zip(sentence, sentence_endings, entities_id):
-            if entity_id != -1:
-                print(token, '->', ending, '->', entity_id)"""
-
-    text = 'Большая часть пассажиров аварийного А321 отказалась продолжить полет'
-    segmenter = Segmenter()
-
-    doc_text = Doc(text)
-    doc_text.segment(segmenter)
-
-    token = doc_text.tokens[2]
-    print(token)
-    token.start = 124
-    token.stop = 134
-    print(token)
-
+    for entity, norm in zip(document_entities, document_normalization):
+        print(entity, norm)"""
